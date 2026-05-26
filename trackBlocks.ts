@@ -650,24 +650,29 @@ function assignBlocksToTrains(railNetwork: RailNetwork, trackedTrains: TrainInfo
             return;
         }
 
-        // 1. Resolve Block Assignment
+        // 1. Check Staleness using Block Threshold
+        if (now - train.position.timestamp > (train.currentBlockDisplayThreshold ?? displayThreshold)) {
+            if (train.currentBlock == 0 || train.currentBlock == undefined) {
+                train.currentBlock = undefined;
+                train.previousBlock = undefined;
+                train.currentParentBlock = undefined;
+                train.currentBlockDisplayThreshold = undefined;
+            } else {
+                setTrainBlock(train, train.currentParentBlock, 0, train.currentBlockDisplayThreshold); // Move to block 0 which is the "stale" block
+            }
+            return;
+        }
+
+        // 2. Resolve Block Assignment
         // Check if train is still in its current block
         const currentTrackBlock = trackBlocks.get(train.currentParentBlock!);
-        if (currentTrackBlock && processBlock(currentTrackBlock, trackBlocks, train) ) {
+        if (currentTrackBlock && processBlock(currentTrackBlock, trackBlocks, train)) {
             // Train didn't move blocks.
             // Update previousBlock to match current
             train.previousBlock = train.currentBlock;
         } else {
             // Not in current block (or never had one). Search for block.
             findAndSetTrainBlock(trackBlocks, train, railNetwork.id);
-        }
-
-        // 2. Check Staleness using Block Threshold
-        if (now - train.position.timestamp > (train.currentBlockDisplayThreshold ?? displayThreshold)) {
-            train.currentBlock = undefined;
-            train.previousBlock = undefined;
-            train.currentParentBlock = undefined;
-            train.currentBlockDisplayThreshold = undefined;
         }
 
         // if (train.position.timestamp > now - displayThreshold && train.position.timestamp < now - train.currentBlockDisplayThreshold!) {
@@ -829,9 +834,14 @@ function updateAltBlocks(trackBlocks: TrackBlockMap, trackedTrains: TrainInfo[],
                 const train = trainsInBlock[i];
                 if (!train) continue;
                 if (i === 0) {
-                    train.currentBlock = block.blockNumber; // First train stays in the main block
-                } else if (block.altBlock && i === 1) {
-                    train.currentBlock = block.altBlock;    // Second train moves to alt block if available
+                    // train.currentBlock = block.blockNumber; // First train stays in the main block
+                    setTrainBlock(train, train.currentParentBlock, block.blockNumber, block.displayThreshold);
+                } else if (block.altBlock && (i === 1 || i === 2)) {
+                    // train.currentBlock = block.altBlock;    // Second train moves to alt block if available
+                    setTrainBlock(train, train.currentParentBlock, block.altBlock, block.displayThreshold);
+                    if (train.previousBlock === block.blockNumber) {
+                        train.previousBlock = block.altBlock;
+                    }
                 } else {
                     if (train.trainId) {
                         invisibleTrainIds.push(train.trainId);  // Remaining trains are marked as invisible
@@ -874,7 +884,7 @@ export function generateLedMap(api: LEDRailsAPI, trackedTrains: TrainInfo[], inv
                         if (train.previousBlock === train.currentBlock) {
                             timeOffset = 0; // No movement, no offset
                         } else {
-                            timeOffset = Math.floor(Math.random() * (api.updateInterval - 2)) + 1; // Random offset
+                            timeOffset = Math.floor(Math.random() * (api.updateInterval - 2)) + 2; // Random offset
                         }
                     } else {
                         timeOffset = Math.max(train.position.timestamp - updateTime, 0); // Use timestamp difference
@@ -909,6 +919,6 @@ export function generateLedMap(api: LEDRailsAPI, trackedTrains: TrainInfo[], inv
 
     // Set the output timestamp (factor in worst update time)
     api.output.timestamp = now;
-    api.output.update = api.updateInterval + Math.ceil((worstUpdateTimeMS ?? 0) / 1000);
+    api.output.update = api.updateInterval + (Math.ceil((worstUpdateTimeMS ?? 0) / 1000)) - 1;
     return api;
 }

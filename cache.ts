@@ -3,11 +3,11 @@ import * as fs from 'fs';
 import path from 'path';
 
 const BUN_GZIP_OPTIONS = {
-    level: 9, // Compression level (0-9, 9 for max compression)
+    level: 6, // Compression level (0-9, 9 for max compression)
     memLevel: 9, // Maximum memory usage for compression (9 is max memory)
     strategy: 2, // Z_RLE: Limit match distances to one (run-length encoding)
     windowBits: 31, // 25..31 (16+9..15): The output will have a gzip header and footer (gzip)
-};
+} as const;
 
 const CACHE_CONFIG = {
     folder: path.join(__dirname, 'cache'),
@@ -52,7 +52,7 @@ export async function saveToCache<T>(networkID: string, name: string, inputData:
 export function readFromCache<T>(networkID: string, name: string): T | undefined {
     try {
         const filePath = path.join(CACHE_CONFIG.folder, networkID, `${name}.json.gz`);
-        const decompressed = Bun.gunzipSync(fs.readFileSync(filePath));
+        const decompressed = Bun.gunzipSync(new Uint8Array(fs.readFileSync(filePath)));
         return JSON.parse(Buffer.from(decompressed).toString('utf8')) as T;
     } catch {
         log(LOG_LABELS.CACHE, `Cache file not found ${networkID}/${name}.json.gz`);

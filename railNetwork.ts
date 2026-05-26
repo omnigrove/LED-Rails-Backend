@@ -219,11 +219,16 @@ export class RailNetwork {
             this.updateLEDRailsAPIs();
         }
         const endTime = Date.now();
+
         if (!this.worstUpdateTimeMS || endTime - startTime > this.worstUpdateTimeMS) {
             this.worstUpdateTimeMS = endTime - startTime;
         } else {
             // Add some smoothing to the worst case update time so it goes down over time
             this.worstUpdateTimeMS = this.worstUpdateTimeMS * 0.9 + (endTime - startTime) * 0.1;
+        }
+
+        if (this.config.processingOptions.cacheTrackedTrains) {
+            saveToCache(this.id, 'trackedTrains', this.trackedTrains);
         }
     }
 
@@ -430,9 +435,6 @@ export class RailNetwork {
         if (this.config.processingOptions.pairTrains) {
             saveToCache(this.id, 'trainPairs', this.trainPairs);
         }
-        if (this.config.processingOptions.cacheTrackedTrains) {
-            saveToCache(this.id, 'trackedTrains', this.trackedTrains);
-        }
     }
 
     /**
@@ -441,24 +443,28 @@ export class RailNetwork {
      * Vehicles that have not been updated are removed from tracking.
      */
     async removeStaleVehicles() {
-        if (this.config.processingOptions.removeStaleVehiclesHours) {
-
+        const hours = this.config.processingOptions.removeStaleVehiclesHours;
+        if (hours) {
             const now = Date.now();
 
+            // const initialEntityCount = this.entities.length;
+            // const initialTrainCount = this.trackedTrains.length;
+
             this.entities = this.entities.filter(entity => {
-                const vehicleTimestamp = entity.vehicle?.timestamp ? entity.vehicle.timestamp * 1000 : 0;
-                const vehicleTimstampMs = vehicleTimestamp * 1000;
-                const ageMs = now - vehicleTimstampMs;
-                const isFresh = ageMs <= this.config.processingOptions.removeStaleVehiclesHours * 3600 * 1000;
+                const vehicleTimestampMs = entity.vehicle?.timestamp ? entity.vehicle.timestamp * 1000 : 0;
+                const ageMs = now - vehicleTimestampMs;
+                const isFresh = ageMs <= hours * 3600 * 1000;
                 return isFresh;
             });
 
             this.trackedTrains = this.trackedTrains.filter(train => {
                 const trainTimestampMs = train.position.timestamp * 1000;
                 const ageMs = now - trainTimestampMs;
-                const isFresh = ageMs <= this.config.processingOptions.removeStaleVehiclesHours * 3600 * 1000;
+                const isFresh = ageMs <= hours * 3600 * 1000;
                 return isFresh;
             });
+
+            // log(this.id, `Removed ${initialEntityCount - this.entities.length} stale entities and ${initialTrainCount - this.trackedTrains.length} stale trains from tracking.`);
         }
     }
 }

@@ -14,7 +14,8 @@
   "processingOptions": {
     "pairTrains": false,
     "cacheGTFS": true,
-    "cacheIntervalSeconds": 60,
+    "cacheTrackedTrains": true,
+    "cacheIntervalSeconds": 360,
     "displayThreshold": 120
   },
   "trackBlocks": {
